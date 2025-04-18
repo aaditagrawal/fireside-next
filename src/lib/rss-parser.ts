@@ -17,9 +17,11 @@ interface CustomFeed {
     logo?: string;
   };
   generator?: string;
+  categories?: string[];
 }
 
 interface CustomItem {
+  [key: string]: unknown;
   title?: string;
   content?: string;
   contentSnippet?: string;
@@ -35,8 +37,8 @@ interface CustomItem {
 // Create a custom parser instance for rss-parser
 const rssParser = new RssParser({
   customFields: {
-    feed: ["generator", "publisher", "lastBuildDate"],
-    item: ["author", "content", "contentSnippet", "creator", "encoded"],
+    feed: ["generator", "publisher", "lastBuildDate", "category"],
+    item: ["author", "content", "contentSnippet", "creator", "encoded", "category"],
   },
   xml2js: {
     // Improve namespace handling
@@ -100,8 +102,8 @@ export async function fetchFeed(feedUrl: string): Promise<CustomFeed | null> {
       // Better parser configuration for handling various RSS formats
       const parser = new RssParser({
         customFields: {
-          feed: ["generator", "publisher", "lastBuildDate"],
-          item: ["author", "content", "contentSnippet", "creator", "encoded"],
+          feed: ["generator", "publisher", "lastBuildDate", "category"],
+          item: ["author", "content", "contentSnippet", "creator", "encoded", "category"],
         },
         xml2js: {
           // More robust XML parsing options
@@ -137,6 +139,17 @@ export async function fetchFeed(feedUrl: string): Promise<CustomFeed | null> {
 
         return item;
       });
+
+      // Extract feed-level categories
+      let feedCategories: string[] = [];
+      if ((feed as any).category) {
+        if (Array.isArray((feed as any).category)) {
+          feedCategories = (feed as any).category as string[];
+        } else {
+          feedCategories = [(feed as any).category as string];
+        }
+      }
+      feed.categories = feedCategories.filter(Boolean);
 
       return feed as unknown as CustomFeed;
     } catch (rssParseError) {
@@ -236,6 +249,21 @@ async function parseAlternative(
               : "",
         };
       }
+
+      // Extract feed-level categories
+      const fallbackCategories: string[] = [];
+      if (channel.category) {
+        if (Array.isArray(channel.category)) {
+          for (const cat of channel.category as Array<unknown>) {
+            const text = extractTextContent(cat);
+            if (text) fallbackCategories.push(text);
+          }
+        } else {
+          const text = extractTextContent(channel.category);
+          if (text) fallbackCategories.push(text);
+        }
+      }
+      feed.categories = fallbackCategories;
 
       // Handle items
       const items = Array.isArray(channel.item)
@@ -721,6 +749,46 @@ export async function processFeed(
           `Error processing publisher '${feed.publisher.name}':`,
           pubError,
         );
+      }
+    }
+
+    // Process feed-level categories
+    if (feed.categories && feed.categories.length > 0) {
+      for (const categoryName of feed.categories) {
+        try {
+          const existingCats = await executeQuery({
+            query: "SELECT CategoryID FROM Categories WHERE Name = ?",
+            values: [categoryName],
+          });
+
+          let categoryId: number;
+          if (Array.isArray(existingCats) && existingCats.length > 0) {
+            categoryId = existingCats[0].CategoryID;
+          } else {
+            const catResult = await executeQuery({
+              query: "INSERT INTO Categories (Name) VALUES (?)",
+              values: [categoryName],
+            });
+
+            if (
+              catResult &&
+              typeof catResult === "object" &&
+              "insertId" in catResult &&
+              typeof (catResult as any).insertId === "number"
+            ) {
+              categoryId = (catResult as any).insertId;
+            } else {
+              console.log(`Failed to save category: ${categoryName}`);
+              continue;
+            }
+          }
+          await executeQuery({
+            query: "INSERT IGNORE INTO Feed_Categories (FeedID, CategoryID) VALUES (?, ?)",
+            values: [feedId, categoryId],
+          });
+        } catch (catError) {
+          console.error(`Error processing category '${categoryName}' for feed ${feedId}:`, catError);
+        }
       }
     }
 

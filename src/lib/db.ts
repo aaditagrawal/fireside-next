@@ -1,12 +1,12 @@
 import mariadb from "mariadb";
 
 const pool = mariadb.createPool({
-  host: process.env.MYSQL_HOST || "localhost",
+  host: process.env.MYSQL_HOST || "127.0.0.1",
   port: parseInt(process.env.MYSQL_PORT || "3306"),
-  database: process.env.MYSQL_DATABASE || "test", // Update this if your database name is different
-  user: process.env.MYSQL_USER || "appuser", // Using the dedicated app user instead of root
-  password: process.env.MYSQL_PASSWORD || "secure_password", // Using the password set for appuser
-  connectionLimit: 5, // Adjust based on your needs
+  database: process.env.MYSQL_DATABASE || "rss_aggregator",
+  user: process.env.MYSQL_USER || "appuser",
+  password: process.env.MYSQL_PASSWORD || "secure_password",
+  connectionLimit: 5,
 });
 
 export async function executeQuery({
