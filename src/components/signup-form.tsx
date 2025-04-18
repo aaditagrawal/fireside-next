@@ -8,21 +8,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-interface LoginFormProps extends React.ComponentProps<"div"> {
+interface SignupFormProps extends React.ComponentProps<"div"> {
   onToggleForm?: () => void;
 }
 
-export function LoginForm({
+export function SignupForm({
   className,
   onToggleForm,
   ...props
-}: LoginFormProps) {
+}: SignupFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const [formData, setFormData] = React.useState({
+    name: "",
     email: "",
     password: "",
+    confirmPassword: "",
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,6 +40,12 @@ export function LoginForm({
     setError(null);
 
     // Client-side validation
+    if (!formData.name.trim()) {
+      setError("Name is required");
+      setIsLoading(false);
+      return;
+    }
+
     if (!formData.email) {
       setError("Email is required");
       setIsLoading(false);
@@ -56,20 +64,39 @@ export function LoginForm({
       return;
     }
 
+    if (formData.password.length < 8) {
+      setError("Password must be at least 8 characters long");
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        }),
       });
 
       const data = await response.json();
 
+      console.log("Registration response:", data); // Add logging for debugging
+
       if (data.success) {
-        // Redirect to dashboard on successful login
-        router.push("/dashboard");
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 100);
       } else {
-        setError(data.error || "Login failed. Please try again.");
+        setError(data.error || "Registration failed. Please try again.");
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -93,15 +120,15 @@ export function LoginForm({
               </div>
               <span className="sr-only">Fireside RSS</span>
             </a>
-            <h1 className="text-xl font-bold">Welcome to Fireside RSS</h1>
+            <h1 className="text-xl font-bold">Create an account</h1>
             <div className="text-center text-sm">
-              Don&apos;t have an account?{" "}
+              Already have an account?{" "}
               <button
                 type="button"
                 onClick={onToggleForm}
                 className="underline underline-offset-4 hover:text-primary"
               >
-                Sign up
+                Sign in
               </button>
             </div>
           </div>
@@ -111,6 +138,20 @@ export function LoginForm({
                 {error}
               </div>
             )}
+            <div className="grid gap-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                name="name"
+                type="text"
+                placeholder="John Doe"
+                autoComplete="name"
+                disabled={isLoading}
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -131,19 +172,36 @@ export function LoginForm({
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 disabled={isLoading}
                 value={formData.password}
                 onChange={handleInputChange}
                 required
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                disabled={isLoading}
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
             <Button type="submit" className="w-full mt-2" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In"}
+              {isLoading ? "Creating account..." : "Create Account"}
             </Button>
           </div>
         </div>
       </form>
+      <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
+        By signing up, you agree to our <a href="#">Terms of Service</a> and{" "}
+        <a href="#">Privacy Policy</a>.
+      </div>
     </div>
   );
 }
