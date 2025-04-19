@@ -3,11 +3,13 @@ import mariadb from "mariadb";
 const pool = mariadb.createPool({
   host: process.env.MYSQL_HOST || "127.0.0.1",
   port: parseInt(process.env.MYSQL_PORT || "3306"),
-  database: process.env.MYSQL_DATABASE || "rss_aggregator",
   user: process.env.MYSQL_USER || "appuser",
   password: process.env.MYSQL_PASSWORD || "secure_password",
+  database: process.env.MYSQL_DATABASE || "rss_aggregator",
   connectionLimit: 5,
 });
+
+console.log("DB pool is using database:", process.env.MYSQL_DATABASE);
 
 export async function executeQuery({
   query,

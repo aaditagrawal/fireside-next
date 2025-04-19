@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { executeQuery } from "./db";
+import pool, { executeQuery } from "./db";
 
 interface RegisterParams {
   name: string;
@@ -28,48 +28,71 @@ function hashPassword(
 
 // Register a new user
 export async function registerUser({ name, email, password }: RegisterParams) {
-  try {
-    // Check if user already exists
-    const existingUser = await executeQuery({
-      query: "SELECT Email FROM Users WHERE Email = ?",
-      values: [email],
-    });
+  // Sanitize and normalize inputs
+  const trimmedName = name.trim();
+  const normalizedEmail = email.trim().toLowerCase();
 
-    if (Array.isArray(existingUser) && existingUser.length > 0) {
+  // Validate presence
+  if (!trimmedName || !normalizedEmail || !password) {
+    return { success: false, error: "Missing required registration fields" };
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    return { success: false, error: "Invalid email format" };
+  }
+
+  // Start a transaction on a dedicated connection
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Check if user already exists
+    const [existingRows]: any[] = await conn.query(
+      "SELECT Email FROM Users WHERE Email = ?",
+      [normalizedEmail]
+    );
+    if (Array.isArray(existingRows) && existingRows.length > 0) {
+      await conn.rollback();
       return { success: false, error: "Email already in use" };
     }
 
-    // Hash the password with a salt
+    // Hash password
     const { hash, salt } = hashPassword(password);
-    const passwordHash = `${hash}:${salt}`; // Store hash and salt together
+    const passwordHash = `${hash}:${salt}`;
 
-    // Insert new user
-    const result = await executeQuery({
-      query:
-        "INSERT INTO Users (Name, Email, PasswordHash, Role) VALUES (?, ?, ?, 'user')",
-      values: [name, email, passwordHash],
-    });
+    // Insert the new user
+    const insertRes: any = await conn.query(
+      "INSERT INTO Users (Name, Email, PasswordHash, Role) VALUES (?, ?, ?, 'user')",
+      [trimmedName, normalizedEmail, passwordHash]
+    );
+    const userId = insertRes.insertId;
 
-    if (!result || !("insertId" in result)) {
-      return { success: false, error: "Failed to create user" };
+    // Commit the transaction
+    await conn.commit();
+
+    // Confirm insertion
+    const [userRow]: any[] = await conn.query(
+      "SELECT UserID AS id, Name AS name, Email AS email, Role AS role FROM Users WHERE UserID = ?",
+      [userId]
+    );
+    // Ensure User_Role is populated
+    await conn.query(
+      "INSERT IGNORE INTO User_Role (UserID, Role) VALUES (?, ?)",
+      [userRow.id, userRow.role]
+    );
+    return { success: true, user: userRow };
+  } catch (err: any) {
+    console.error("Registration transaction error:", err);
+    try { await conn.rollback(); } catch {}
+    if (err.code === "ER_DUP_ENTRY") {
+      return { success: false, error: "Email already in use" };
     }
-
-    // Return success with user info (excluding password)
-    return {
-      success: true,
-      user: {
-        id: result.insertId,
-        name,
-        email,
-        role: "user",
-      },
-    };
-  } catch (error: unknown) {
-    console.error("Registration error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Registration failed",
-    };
+    // Rethrow unknown errors
+    throw err;
+  } finally {
+    conn.release();
   }
 }
 
