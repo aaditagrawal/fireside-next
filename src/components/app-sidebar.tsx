@@ -94,6 +94,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ],
     navSecondary: [
       {
+        title: "Manual Entry",
+        url: "/manual",
+        icon: Tag,
+      },
+      {
         title: "Settings",
         url: "/settings",
         icon: Settings2,

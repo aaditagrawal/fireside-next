@@ -79,6 +79,19 @@ export function FeedArticleViewer({
             publisherName: data.article.PublisherName || "",
             pubDate: data.article.PubDate || "",
             link: data.article.Link || "",
+            isSaved: data.article.IsSaved,
+            likeCount: data.article.LikeCount,
+            userLiked: data.article.UserLiked,
+          });
+
+          // Record a read interaction
+          await fetch("/api/items/interact", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              itemId: articleId,
+              type: "read",
+            }),
           });
         } else {
           setError(data.error || "Failed to load article");
@@ -98,6 +111,18 @@ export function FeedArticleViewer({
       fetchArticle();
     } else {
       setIsLoading(false);
+
+      // If articleId is available but we already have content, still record the read
+      if (articleId) {
+        fetch("/api/items/interact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId: articleId,
+            type: "read",
+          }),
+        }).catch((err) => console.error("Failed to record read:", err));
+      }
     }
   }, [articleId, initialContent]);
 
