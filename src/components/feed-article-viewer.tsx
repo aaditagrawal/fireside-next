@@ -79,6 +79,9 @@ export function FeedArticleViewer({
             publisherName: data.article.PublisherName || "",
             pubDate: data.article.PubDate || "",
             link: data.article.Link || "",
+            isSaved: data.article.IsSaved,
+            likeCount: data.article.LikeCount,
+            userLiked: data.article.UserLiked,
           });
 
           // Record a read interaction
