@@ -74,7 +74,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: "Home",
         url: "/dashboard",
         icon: Home,
-        isActive: true,
       },
       {
         title: "All Articles",
@@ -88,7 +87,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       },
       {
         title: "Discover",
-        url: "/discover",
+        url: "/discover", // Make sure this exists
         icon: Sparkles,
       },
     ],

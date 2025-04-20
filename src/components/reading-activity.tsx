@@ -79,8 +79,20 @@ export function ReadingActivity({ userId }: ReadingActivityProps) {
 
   // Get day name from date
   const getDayName = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(date);
+    try {
+      const date = new Date(dateStr);
+      // Check if the date is valid before formatting
+      if (isNaN(date.getTime())) {
+        console.error(`Invalid date string: ${dateStr}`);
+        return "Invalid";
+      }
+      return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
+        date,
+      );
+    } catch (error) {
+      console.error(`Error formatting date: ${dateStr}`, error);
+      return "Error";
+    }
   };
 
   // Loading state

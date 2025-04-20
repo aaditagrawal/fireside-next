@@ -8,8 +8,9 @@ import { LogoutButton } from "@/components/logout-button";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { ArticleCarousel } from "@/components/article-carousel";
 import { FeedRecommendations } from "@/components/feed-recommendations";
-import { ReadingActivity } from "@/components/reading-activity";
 import { AddFeedForm } from "@/components/add-feed-form";
+import { ReadingActivityChart } from "@/components/reading-activity-chart";
+import { CategoryRadarChart } from "@/components/category-radar-chart";
 
 import {
   Breadcrumb,
@@ -268,6 +269,12 @@ export default function DashboardPage() {
           {/* Stats Row */}
           <DashboardStats userId={user.id} />
 
+          {/* Data Visualization Charts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ReadingActivityChart userId={user.id} />
+            <CategoryRadarChart userId={user.id} />
+          </div>
+
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-6">
@@ -348,9 +355,6 @@ export default function DashboardPage() {
                     });
                 }}
               />
-
-              {/* Reading Activity Chart */}
-              <ReadingActivity userId={user.id} />
 
               {/* Feed Recommendations */}
               <FeedRecommendations userId={user.id} />

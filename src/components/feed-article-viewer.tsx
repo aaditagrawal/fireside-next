@@ -52,6 +52,9 @@ export function FeedArticleViewer({
     pubDate: initialPubDate,
     content: initialContent,
     link: initialLink,
+    isSaved: false,
+    likeCount: 0,
+    userLiked: false,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -279,6 +282,35 @@ export function FeedArticleViewer({
     }
   `;
 
+  // Handlers for save and like functionality
+  const handleSave = async () => {
+    if (!articleId || articleData.isSaved) return;
+    try {
+      await fetch("/api/items/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: articleId, type: "save" }),
+      });
+      setArticleData(prev => ({ ...prev, isSaved: true }));
+    } catch (err) {
+      console.error("Failed to save article:", err);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!articleId || articleData.userLiked) return;
+    try {
+      await fetch("/api/items/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: articleId, type: "like" }),
+      });
+      setArticleData(prev => ({ ...prev, userLiked: true, likeCount: prev.likeCount + 1 }));
+    } catch (err) {
+      console.error("Failed to like article:", err);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card className="max-w-4xl mx-auto">
@@ -407,13 +439,14 @@ export function FeedArticleViewer({
 
       <CardFooter className="flex flex-wrap gap-4 justify-between py-4">
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" className="group">
+          <Button onClick={handleLike} variant={articleData.userLiked ? "default" : "outline"} size="sm" className="group">
             <ThumbsUpIcon className="h-4 w-4 mr-2 group-hover:text-primary" />
-            Like
+            {articleData.userLiked ? "Liked" : "Like"}
+            {articleData.likeCount > 0 && <Badge className="ml-2">{articleData.likeCount}</Badge>}
           </Button>
-          <Button variant="outline" size="sm" className="group">
+          <Button onClick={handleSave} variant={articleData.isSaved ? "default" : "outline"} size="sm" className="group">
             <BookmarkIcon className="h-4 w-4 mr-2 group-hover:text-primary" />
-            Save
+            {articleData.isSaved ? "Saved" : "Save"}
           </Button>
           <Button variant="outline" size="sm" className="group">
             <Share2Icon className="h-4 w-4 mr-2 group-hover:text-primary" />

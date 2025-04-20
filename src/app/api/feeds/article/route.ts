@@ -54,16 +54,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get article data
+    // Fetch article data with saved status
     const articleData = await executeQuery({
       query: `
         SELECT
           fi.ItemID, fi.Title, fi.Content, fi.PubDate, fi.Link, fi.IsRead,
+          COALESCE(ufi.IsSaved, 0) AS IsSaved,
           f.FeedID, f.Title as FeedTitle,
           GROUP_CONCAT(DISTINCT a.Name SEPARATOR ', ') as Authors,
           p.Name as PublisherName
         FROM FeedItems fi
         JOIN Feeds f ON fi.FeedID = f.FeedID
+        LEFT JOIN User_FeedItems ufi ON fi.ItemID = ufi.ItemID AND ufi.UserID = ?
         LEFT JOIN FeedItemAuthors fia ON fi.ItemID = fia.ItemID
         LEFT JOIN Authors a ON fia.AuthorID = a.AuthorID
         LEFT JOIN FeedItemPublishers fip ON fi.ItemID = fip.ItemID
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
         WHERE fi.ItemID = ?
         GROUP BY fi.ItemID
       `,
-      values: [parseInt(articleId, 10)],
+      values: [user.id, parseInt(articleId, 10)],
     });
 
     if (!Array.isArray(articleData) || articleData.length === 0) {
@@ -110,12 +112,32 @@ export async function GET(request: NextRequest) {
     } catch (err) {
       console.error("Error fetching full article:", err);
     }
+
+    // Fetch like count and user like status
+    const likeResult = await executeQuery({
+      query: "SELECT COUNT(*) as LikeCount FROM Interactions WHERE ItemID = ? AND Type = ?",
+      values: [base.ItemID, "like"],
+    });
+    const likeCount =
+      Array.isArray(likeResult) && likeResult.length > 0
+        ? Number((likeResult[0] as any).LikeCount)
+        : 0;
+    const userLikedResult = await executeQuery({
+      query: "SELECT COUNT(*) as cnt FROM Interactions WHERE ItemID = ? AND UserID = ? AND Type = ?",
+      values: [base.ItemID, user.id, "like"],
+    });
+    const userLiked =
+      Array.isArray(userLikedResult) &&
+      userLikedResult.length > 0 &&
+      Number((userLikedResult[0] as any).cnt) > 0;
+
     const article = {
       ...base,
       Content: contentHtml,
-      PubDate: base.PubDate
-        ? new Date(base.PubDate).toISOString()
-        : null,
+      PubDate: base.PubDate ? new Date(base.PubDate).toISOString() : null,
+      IsSaved: base.IsSaved === 1,
+      LikeCount: likeCount,
+      UserLiked: userLiked,
     };
 
     return NextResponse.json({ success: true, article });
