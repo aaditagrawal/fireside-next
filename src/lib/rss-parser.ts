@@ -1,6 +1,7 @@
 import RssParser from "rss-parser"; // Renamed to avoid conflict with xml2js Parser
 import { executeQuery } from "./db";
 import { Parser as XmlParser, processors } from "xml2js"; // Correct import for xml2js parser
+import { comprehensiveFeedProcessor } from "./feed-processor";
 
 // Custom parser types
 interface CustomFeed {
@@ -38,7 +39,14 @@ interface CustomItem {
 const rssParser = new RssParser({
   customFields: {
     feed: ["generator", "publisher", "lastBuildDate", "category"],
-    item: ["author", "content", "contentSnippet", "creator", "encoded", "category"],
+    item: [
+      "author",
+      "content",
+      "contentSnippet",
+      "creator",
+      "encoded",
+      "category",
+    ],
   },
   xml2js: {
     // Improve namespace handling
@@ -103,7 +111,14 @@ export async function fetchFeed(feedUrl: string): Promise<CustomFeed | null> {
       const parser = new RssParser({
         customFields: {
           feed: ["generator", "publisher", "lastBuildDate", "category"],
-          item: ["author", "content", "contentSnippet", "creator", "encoded", "category"],
+          item: [
+            "author",
+            "content",
+            "contentSnippet",
+            "creator",
+            "encoded",
+            "category",
+          ],
         },
         xml2js: {
           // More robust XML parsing options
@@ -615,18 +630,43 @@ function normalizeAtomEntry(entry: Record<string, unknown>): CustomItem {
 }
 
 /**
+ * Bulk-upsert helper: Inserts distinct names and returns a name→ID map
+ */
+async function upsertNames(
+  table: string,
+  keyCol: string,
+  names: string[],
+): Promise<Record<string, number>> {
+  const uniq = Array.from(new Set(names));
+  if (!uniq.length) return {};
+  const placeholders = uniq.map(() => "(?)").join(",");
+  await executeQuery({
+    query: `INSERT IGNORE INTO ${table} (${keyCol}) VALUES ${placeholders}`,
+    values: uniq,
+  });
+  const rows: Array<{ id: number; name: string }> = await executeQuery({
+    query: `
+      SELECT ${table.slice(0, -1)}ID AS id, ${keyCol} AS name
+      FROM ${table}
+      WHERE ${keyCol} IN (?)
+    `,
+    values: [uniq],
+  });
+  return rows.reduce(
+    (m, r) => ((m[r.name] = r.id), m),
+    {} as Record<string, number>,
+  );
+}
+
+/**
  * Process and save a feed to the database
  */
-export async function processFeed(
-  feedUrl: string,
-  userId?: number,
-): Promise<{ success: boolean; message: string; feedId?: number }> {
-  try {
-    // 1. First check if the feed already exists
-    const existingFeeds = await executeQuery({
-      query: "SELECT FeedID, Title FROM Feeds WHERE FeedURL = ?",
-      values: [feedUrl],
-    });
+ export async function processFeed(
+   feedUrl: string,
+   userId?: number,
+ ): Promise<{ success: boolean; message: string; feedId?: number }> {
+   return comprehensiveFeedProcessor(feedUrl, userId);
+ }
 
     let feedId: number;
     const feed = await fetchFeed(feedUrl);
@@ -708,88 +748,51 @@ export async function processFeed(
     }
 
     // 4. Process the publisher (if found)
-    let publisherId: number | null = null;
-    if (feed.publisher && feed.publisher.name) {
-      try {
-        const publishers = await executeQuery({
-          query: "SELECT PublisherID FROM Publishers WHERE Name = ?",
-          values: [feed.publisher.name],
-        });
+    // (Publisher processing handled via upsertNames above)
 
-        if (Array.isArray(publishers) && publishers.length > 0) {
-          publisherId = publishers[0].PublisherID;
-        } else {
-          const publisherResult = await executeQuery({
-            query:
-              "INSERT INTO Publishers (Name, Website, LogoURL, RSSMetadata) VALUES (?, ?, ?, ?)",
-            values: [
-              feed.publisher.name,
-              feed.publisher.url || feed.link || "",
-              feed.publisher.logo || "",
-              feed.generator || "",
-            ],
-          });
+    // Bulk-upsert & link
+    const feedPublisherNames = feed.publisher?.name
+      ? [feed.publisher.name]
+      : [];
+    const feedCategoryNames = feed.categories || [];
+    const itemAuthorNames = feed.items
+      .flatMap((i) => i.authors || (i.author ? [i.author] : []))
+      .filter(Boolean);
+    const itemCategoryNames = feed.items
+      .flatMap((i) => i.categories || [])
+      .filter(Boolean);
 
-          if (
-            publisherResult &&
-            typeof publisherResult === "object" &&
-            "insertId" in publisherResult &&
-            typeof publisherResult.insertId === "number"
-          ) {
-            publisherId = publisherResult.insertId;
-            console.log(
-              `Added new publisher '${feed.publisher.name}' with ID ${publisherId}`,
-            );
-          } else {
-            console.log(`Failed to insert publisher: ${feed.publisher.name}`);
-          }
-        }
-      } catch (pubError) {
-        console.error(
-          `Error processing publisher '${feed.publisher.name}':`,
-          pubError,
-        );
-      }
+    const feedPublisherMap = await upsertNames(
+      "Publishers",
+      "Name",
+      feedPublisherNames,
+    );
+    const feedCategoryMap = await upsertNames(
+      "Categories",
+      "Name",
+      feedCategoryNames,
+    );
+    const itemAuthorMap = await upsertNames("Authors", "Name", itemAuthorNames);
+    const itemCategoryMap = await upsertNames(
+      "Categories",
+      "Name",
+      itemCategoryNames,
+    );
+
+    if (feed.publisher?.name && feedPublisherMap[feed.publisher.name]) {
+      await executeQuery({
+        query: "UPDATE Feeds SET PublisherID = ? WHERE FeedID = ?",
+        values: [feedPublisherMap[feed.publisher.name], feedId],
+      });
     }
-
-    // Process feed-level categories
-    if (feed.categories && feed.categories.length > 0) {
-      for (const categoryName of feed.categories) {
-        try {
-          const existingCats = await executeQuery({
-            query: "SELECT CategoryID FROM Categories WHERE Name = ?",
-            values: [categoryName],
-          });
-
-          let categoryId: number;
-          if (Array.isArray(existingCats) && existingCats.length > 0) {
-            categoryId = existingCats[0].CategoryID;
-          } else {
-            const catResult = await executeQuery({
-              query: "INSERT INTO Categories (Name) VALUES (?)",
-              values: [categoryName],
-            });
-
-            if (
-              catResult &&
-              typeof catResult === "object" &&
-              "insertId" in catResult &&
-              typeof (catResult as any).insertId === "number"
-            ) {
-              categoryId = (catResult as any).insertId;
-            } else {
-              console.log(`Failed to save category: ${categoryName}`);
-              continue;
-            }
-          }
-          await executeQuery({
-            query: "INSERT IGNORE INTO Feed_Categories (FeedID, CategoryID) VALUES (?, ?)",
-            values: [feedId, categoryId],
-          });
-        } catch (catError) {
-          console.error(`Error processing category '${categoryName}' for feed ${feedId}:`, catError);
-        }
-      }
+    for (const name of feedCategoryNames) {
+      const cid = feedCategoryMap[name];
+      if (cid)
+        await executeQuery({
+          query:
+            "INSERT IGNORE INTO Feed_Categories (FeedID,CategoryID) VALUES (?,?)",
+          values: [feedId, cid],
+        });
     }
 
     // 5. Process each item in the feed
@@ -869,69 +872,27 @@ export async function processFeed(
         const itemId = itemResult.insertId;
         newItemCount++;
 
-        // Process author information
-        // Use const for authors array as it's not reassigned
+        // Link item→authors
         const authors = item.authors?.filter(Boolean) || [];
-        // No need to check item.author separately if normalizeItem handles it correctly
-
-        for (const authorName of authors) {
-          // No need for 'if (!authorName) continue;' because filter(Boolean) handles it
-          try {
-            // Look up or create author
-            const existingAuthors = await executeQuery({
-              query: "SELECT AuthorID FROM Authors WHERE Name = ?",
-              values: [authorName],
-            });
-
-            let authorId: number;
-            if (Array.isArray(existingAuthors) && existingAuthors.length > 0) {
-              authorId = existingAuthors[0].AuthorID;
-            } else {
-              const authorResult = await executeQuery({
-                query: "INSERT INTO Authors (Name) VALUES (?)",
-                values: [authorName],
-              });
-
-              if (
-                !authorResult ||
-                typeof authorResult !== "object" ||
-                !("insertId" in authorResult) ||
-                typeof authorResult.insertId !== "number"
-              ) {
-                console.log(`Failed to save author: ${authorName}`);
-                continue; // Skip linking this author
-              }
-              authorId = authorResult.insertId;
-            }
-
-            // Create link between item and author
+        for (const name of authors) {
+          const aid = itemAuthorMap[name];
+          if (aid)
             await executeQuery({
               query:
-                "INSERT IGNORE INTO FeedItemAuthors (ItemID, AuthorID) VALUES (?, ?)",
-              values: [itemId, authorId],
+                "INSERT IGNORE INTO FeedItemAuthors (ItemID,AuthorID) VALUES (?,?)",
+              values: [itemId, aid],
             });
-          } catch (authorError) {
-            console.error(
-              `Error processing author '${authorName}' for item ${itemId}:`,
-              authorError,
-            );
-          }
         }
-
-        // If we have a publisher, link it to the item
-        if (publisherId) {
-          try {
+        // Link item→categories
+        const cats = item.categories || [];
+        for (const name of cats) {
+          const cid = itemCategoryMap[name];
+          if (cid)
             await executeQuery({
               query:
-                "INSERT IGNORE INTO FeedItemPublishers (ItemID, PublisherID) VALUES (?, ?)",
-              values: [itemId, publisherId],
+                "INSERT IGNORE INTO FeedItemCategories (ItemID,CategoryID) VALUES (?,?)",
+              values: [itemId, cid],
             });
-          } catch (itemPubError) {
-            console.error(
-              `Error linking item ${itemId} to publisher ${publisherId}:`,
-              itemPubError,
-            );
-          }
         }
       } catch (itemProcessingError) {
         console.error(
