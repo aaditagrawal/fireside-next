@@ -1,26 +1,43 @@
-"use client"
+"use client";
 
-import { type LucideIcon } from "lucide-react"
+import { type LucideIcon } from "lucide-react";
 
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export function NavMain({
   items,
 }: {
   items: {
-    title: string
-    url: string
-    icon: LucideIcon
-    isActive?: boolean
-  }[]
+    title: string;
+    url: string;
+    icon: LucideIcon;
+    isActive?: boolean;
+  }[];
 }) {
+  const pathname = usePathname();
+  const [navItems, setNavItems] = useState(items);
+
+  // Update active state based on current path
+  useEffect(() => {
+    setNavItems(
+      items.map((item) => ({
+        ...item,
+        isActive:
+          pathname === item.url ||
+          (item.url !== "/dashboard" && pathname.startsWith(item.url)),
+      })),
+    );
+  }, [pathname, items]);
+
   return (
     <SidebarMenu>
-      {items.map((item) => (
+      {navItems.map((item) => (
         <SidebarMenuItem key={item.title}>
           <SidebarMenuButton asChild isActive={item.isActive}>
             <a href={item.url}>
@@ -31,5 +48,5 @@ export function NavMain({
         </SidebarMenuItem>
       ))}
     </SidebarMenu>
-  )
+  );
 }

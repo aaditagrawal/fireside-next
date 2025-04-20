@@ -32,13 +32,10 @@ export async function GET(request: NextRequest) {
         success: true,
         subscriptions: result.subscriptions,
       });
-    } else {
-      console.error("Failed to fetch subscriptions:", result.error);
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 },
-      );
     }
+    console.error("Failed to fetch subscriptions:", result.error);
+    // Return status 200 even on failure to let client handle error
+    return NextResponse.json({ success: false, error: result.error });
   } catch (error: unknown) {
     console.error("Fetch subscriptions error:", error);
     return NextResponse.json(

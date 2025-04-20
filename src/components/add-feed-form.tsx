@@ -20,7 +20,11 @@ export function AddFeedForm({
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
-  const [debugResult, setDebugResult] = React.useState<{ success: boolean; feed?: any; error?: string } | null>(null);
+  const [debugResult, setDebugResult] = React.useState<{
+    success: boolean;
+    feed?: any;
+    error?: string;
+  } | null>(null);
   const [feedUrl, setFeedUrl] = React.useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,8 +54,34 @@ export function AddFeedForm({
       setDebugResult(debugData);
       if (!debugData.success) {
         // Parsing failed, show debug error
-        setError(debugData.error || "Failed to parse feed. Please check the URL.");
+        setError(
+          debugData.error || "Failed to parse feed. Please check the URL.",
+        );
+        setIsLoading(false);
         return;
+      }
+
+      // Additional debug check to see what might be failing
+      try {
+        const detailedDebug = await fetch("/api/feeds/debug-add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: feedUrl }),
+        });
+        const detailedData = await detailedDebug.json();
+
+        if (!detailedData.success) {
+          console.error("Detailed debug error:", detailedData);
+          setError(
+            `Error at stage ${detailedData.stage}: ${detailedData.error}`,
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        console.log("Feed could be processed:", detailedData);
+      } catch (detailedError) {
+        console.error("Error running detailed debug:", detailedError);
       }
 
       // Step 2: Add the feed
@@ -123,7 +153,8 @@ export function AddFeedForm({
         <div className="bg-gray-100 p-4 rounded-md text-sm overflow-auto">
           {debugResult.success ? (
             <div>
-              <strong>Debug Success:</strong> {debugResult.feed.title} ({debugResult.feed.itemCount} items)
+              <strong>Debug Success:</strong> {debugResult.feed.title} (
+              {debugResult.feed.itemCount} items)
             </div>
           ) : (
             <div className="text-destructive">
