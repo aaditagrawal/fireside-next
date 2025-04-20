@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { registerUser } from "@/lib/auth";
 import { createSession } from "@/lib/session";
+import { executeQuery } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,6 +34,19 @@ export async function POST(request: NextRequest) {
     const result = await registerUser({ name, email, password });
 
     if (result.success && result.user) {
+      // Verify the user was persisted
+      const verifyRes: any[] = await executeQuery({
+        query: "SELECT COUNT(*) AS count FROM Users WHERE UserID = ?",
+        values: [result.user.id],
+      });
+      if (!Array.isArray(verifyRes) || verifyRes[0].count === 0) {
+        console.error(`Signup succeeded but no Users row for ID ${result.user.id}`);
+        return NextResponse.json(
+          { success: false, error: "Registration failed: no DB entry" },
+          { status: 500 }
+        );
+      }
+
       // Create a new session
       const sessionToken = await createSession(result.user.id);
 

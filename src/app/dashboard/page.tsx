@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { NavActions } from "@/components/nav-actions";
-import { AddFeedForm } from "@/components/add-feed-form";
-import { FeedItemList } from "@/components/feed-item-list";
 import { LogoutButton } from "@/components/logout-button";
-import { FeedDebugger } from "@/components/feed-debugger";
+import { DashboardStats } from "@/components/dashboard-stats";
+import { ArticleCarousel } from "@/components/article-carousel";
+import { FeedRecommendations } from "@/components/feed-recommendations";
+import { ReadingActivity } from "@/components/reading-activity";
+import { AddFeedForm } from "@/components/add-feed-form";
 
 import {
   Breadcrumb,
@@ -21,7 +23,8 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Home } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -32,7 +35,29 @@ export default function DashboardPage() {
     role?: string;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshFeeds, setRefreshFeeds] = useState(0);
+
+  // State for article carousels
+  const [trendingArticles, setTrendingArticles] = useState([]);
+  const [recommendedArticles, setRecommendedArticles] = useState([]);
+  const [recentArticles, setRecentArticles] = useState([]);
+  const [savedArticles, setSavedArticles] = useState([]);
+  const [articlesLoading, setArticlesLoading] = useState({
+    trending: true,
+    recommended: true,
+    recent: true,
+    saved: true,
+  });
+  const [articlesError, setArticlesError] = useState<{
+    trending: string | null;
+    recommended: string | null;
+    recent: string | null;
+    saved: string | null;
+  }>({
+    trending: null,
+    recommended: null,
+    recent: null,
+    saved: null,
+  });
 
   // Session check
   useEffect(() => {
@@ -46,7 +71,6 @@ export default function DashboardPage() {
         }
 
         const data = await response.json();
-        console.log("Session check response:", data);
 
         if (data.user) {
           setUser(data.user);
@@ -65,10 +89,138 @@ export default function DashboardPage() {
     checkSession();
   }, [router]);
 
-  // Handle feed added
-  const handleFeedAdded = () => {
-    setRefreshFeeds((prev) => prev + 1);
-  };
+  // Fetch articles for each carousel
+  useEffect(() => {
+    const fetchArticles = async () => {
+      if (!user) return;
+
+      // Fetch trending articles
+      try {
+        setArticlesLoading((prev) => ({ ...prev, trending: true }));
+        setArticlesError((prev) => ({ ...prev, trending: null }));
+
+        const response = await fetch("/api/articles/trending");
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch trending articles: ${response.statusText}`,
+          );
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setTrendingArticles(data.articles || []);
+        } else {
+          throw new Error(data.error || "Failed to fetch trending articles");
+        }
+      } catch (error) {
+        console.error("Error fetching trending articles:", error);
+        setArticlesError((prev) => ({
+          ...prev,
+          trending:
+            error instanceof Error
+              ? error.message
+              : "Failed to load trending articles",
+        }));
+      } finally {
+        setArticlesLoading((prev) => ({ ...prev, trending: false }));
+      }
+
+      // Fetch recommended articles
+      try {
+        setArticlesLoading((prev) => ({ ...prev, recommended: true }));
+        setArticlesError((prev) => ({ ...prev, recommended: null }));
+
+        const response = await fetch("/api/articles/recommended");
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch recommended articles: ${response.statusText}`,
+          );
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setRecommendedArticles(data.articles || []);
+        } else {
+          throw new Error(data.error || "Failed to fetch recommended articles");
+        }
+      } catch (error) {
+        console.error("Error fetching recommended articles:", error);
+        setArticlesError((prev) => ({
+          ...prev,
+          recommended:
+            error instanceof Error
+              ? error.message
+              : "Failed to load recommended articles",
+        }));
+      } finally {
+        setArticlesLoading((prev) => ({ ...prev, recommended: false }));
+      }
+
+      // Fetch recent articles
+      try {
+        setArticlesLoading((prev) => ({ ...prev, recent: true }));
+        setArticlesError((prev) => ({ ...prev, recent: null }));
+
+        const response = await fetch("/api/articles/recent");
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch recent articles: ${response.statusText}`,
+          );
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setRecentArticles(data.articles || []);
+        } else {
+          throw new Error(data.error || "Failed to fetch recent articles");
+        }
+      } catch (error) {
+        console.error("Error fetching recent articles:", error);
+        setArticlesError((prev) => ({
+          ...prev,
+          recent:
+            error instanceof Error
+              ? error.message
+              : "Failed to load recent articles",
+        }));
+      } finally {
+        setArticlesLoading((prev) => ({ ...prev, recent: false }));
+      }
+
+      // Fetch saved articles
+      try {
+        setArticlesLoading((prev) => ({ ...prev, saved: true }));
+        setArticlesError((prev) => ({ ...prev, saved: null }));
+
+        const response = await fetch("/api/articles/saved");
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch saved articles: ${response.statusText}`,
+          );
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setSavedArticles(data.articles || []);
+        } else {
+          throw new Error(data.error || "Failed to fetch saved articles");
+        }
+      } catch (error) {
+        console.error("Error fetching saved articles:", error);
+        setArticlesError((prev) => ({
+          ...prev,
+          saved:
+            error instanceof Error
+              ? error.message
+              : "Failed to load saved articles",
+        }));
+      } finally {
+        setArticlesLoading((prev) => ({ ...prev, saved: false }));
+      }
+    };
+
+    fetchArticles();
+  }, [user]);
 
   if (isLoading) {
     return (
@@ -86,7 +238,7 @@ export default function DashboardPage() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b">
           <div className="flex flex-1 items-center gap-2 px-3">
             <SidebarTrigger />
             <Separator
@@ -96,8 +248,9 @@ export default function DashboardPage() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1">
-                    RSS Feed Dashboard
+                  <BreadcrumbPage className="line-clamp-1 flex items-center">
+                    <Home className="mr-2 h-4 w-4" />
+                    Dashboard
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
@@ -112,41 +265,105 @@ export default function DashboardPage() {
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-6 p-6">
+          {/* Stats Row */}
+          <DashboardStats userId={user.id} />
+
+          {/* Main Content Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Main content area */}
             <div className="md:col-span-2 space-y-6">
-              <FeedItemList
-                userId={user.id}
-                key={`feed-list-${refreshFeeds}`}
+              {/* Recent Articles Carousel */}
+              <ArticleCarousel
+                title="Recently Published"
+                description="Latest articles from your subscribed feeds"
+                articles={recentArticles}
+                isLoading={articlesLoading.recent}
+                error={articlesError.recent}
+                viewAllHref="/articles"
+                carouselId="recent-articles"
+                emptyMessage="No recent articles. Try subscribing to more feeds."
+              />
+
+              {/* Recommended Articles Carousel */}
+              <ArticleCarousel
+                title="Recommended For You"
+                description="Based on your reading preferences"
+                articles={recommendedArticles}
+                isLoading={articlesLoading.recommended}
+                error={articlesError.recommended}
+                carouselId="recommended-articles"
+                emptyMessage="We'll learn your preferences as you read more articles."
+              />
+
+              {/* Trending Articles Carousel */}
+              <ArticleCarousel
+                title="Trending"
+                description="Popular articles from your feeds"
+                articles={trendingArticles}
+                isLoading={articlesLoading.trending}
+                error={articlesError.trending}
+                carouselId="trending-articles"
+                emptyMessage="No trending articles yet."
+              />
+
+              {/* Saved Articles Carousel */}
+              <ArticleCarousel
+                title="Your Saved Articles"
+                description="Articles you've bookmarked for later"
+                articles={savedArticles}
+                isLoading={articlesLoading.saved}
+                error={articlesError.saved}
+                carouselId="saved-articles"
+                emptyMessage="You haven't saved any articles yet."
               />
             </div>
 
-            {/* Sidebar content */}
+            {/* Sidebar Content */}
             <div className="space-y-6">
-              <Card>
-                <CardContent className="pt-6">
-                  <AddFeedForm userId={user.id} onFeedAdded={handleFeedAdded} />
-                </CardContent>
-              </Card>
+              {/* Add Feed Form */}
+              <AddFeedForm
+                userId={user.id}
+                onFeedAdded={() => {
+                  // Refresh Recent Articles when a new feed is added
+                  setArticlesLoading((prev) => ({ ...prev, recent: true }));
+                  fetch("/api/articles/recent")
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data.success) {
+                        setRecentArticles(data.articles || []);
+                      }
+                      setArticlesLoading((prev) => ({
+                        ...prev,
+                        recent: false,
+                      }));
+                    })
+                    .catch((err) => {
+                      console.error(
+                        "Error refreshing articles after adding feed:",
+                        err,
+                      );
+                      setArticlesLoading((prev) => ({
+                        ...prev,
+                        recent: false,
+                      }));
+                    });
+                }}
+              />
 
-              {/* Add the debugger component */}
-              <FeedDebugger />
+              {/* Reading Activity Chart */}
+              <ReadingActivity userId={user.id} />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Quick Tips</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>• Add any RSS or Atom feed by URL</li>
-                    <li>• Articles are automatically refreshed</li>
-                    <li>
-                      • Click on an article title to read the full content
-                    </li>
-                    <li>• Use the sidebar to navigate between feeds</li>
-                  </ul>
-                </CardContent>
-              </Card>
+              {/* Feed Recommendations */}
+              <FeedRecommendations userId={user.id} />
+
+              {/* Useful Links */}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/articles">All Articles</a>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/feeds">Manage Feeds</a>
+                </Button>
+              </div>
             </div>
           </div>
         </div>

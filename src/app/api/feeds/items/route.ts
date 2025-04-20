@@ -35,23 +35,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Construct the query
+    // Construct the query - now using User_FeedItems for read status
     let query = `
       SELECT
-        fi.ItemID, fi.Title, fi.Content, fi.PubDate, fi.Link, fi.IsRead,
+        fi.ItemID, fi.Title, fi.Content, fi.PubDate, fi.Link,
+        COALESCE(ufi.IsRead, 0) AS IsRead,
         f.FeedID, f.Title as FeedTitle,
         GROUP_CONCAT(DISTINCT a.Name SEPARATOR ', ') as Authors,
         p.Name as PublisherName
       FROM FeedItems fi
       JOIN Feeds f ON fi.FeedID = f.FeedID
       JOIN Subscriptions s ON f.FeedID = s.FeedID
+      LEFT JOIN User_FeedItems ufi ON fi.ItemID = ufi.ItemID AND ufi.UserID = ?
       LEFT JOIN FeedItemAuthors fia ON fi.ItemID = fia.ItemID
       LEFT JOIN Authors a ON fia.AuthorID = a.AuthorID
       LEFT JOIN FeedItemPublishers fip ON fi.ItemID = fip.ItemID
       LEFT JOIN Publishers p ON fip.PublisherID = p.PublisherID
       WHERE s.UserID = ?
     `;
-    const values: (number | string)[] = [user.id];
+    const values: (number | string)[] = [user.id, user.id];
 
     // Add feed filter if feedId is provided
     if (feedIdParam) {
@@ -67,7 +69,7 @@ export async function GET(request: NextRequest) {
     }
 
     query += `
-      GROUP BY fi.ItemID, f.FeedID, f.Title, p.Name # Explicitly list non-aggregated columns
+      GROUP BY fi.ItemID, f.FeedID, f.Title, p.Name, ufi.IsRead  # Added ufi.IsRead to GROUP BY
       ORDER BY fi.PubDate DESC, fi.ItemID DESC
       LIMIT ? OFFSET ?
     `;
@@ -83,6 +85,7 @@ export async function GET(request: NextRequest) {
     const formattedItems = resultsArray.map((item) => ({
       ...item,
       PubDate: item.PubDate ? new Date(item.PubDate).toISOString() : null,
+      IsRead: item.IsRead === 1, // Convert to boolean
     }));
 
     return NextResponse.json({

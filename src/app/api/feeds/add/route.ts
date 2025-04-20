@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: result.message,
-        feedId: result.feedId,
+        feedId: Number(result.feedId),
       });
     } else {
       return NextResponse.json(

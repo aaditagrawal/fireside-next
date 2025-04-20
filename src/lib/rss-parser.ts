@@ -1,6 +1,7 @@
 import RssParser from "rss-parser"; // Renamed to avoid conflict with xml2js Parser
 import { executeQuery } from "./db";
 import { Parser as XmlParser, processors } from "xml2js"; // Correct import for xml2js parser
+import { comprehensiveFeedProcessor } from "./feed-processor";
 
 // Custom parser types
 interface CustomFeed {
@@ -17,9 +18,11 @@ interface CustomFeed {
     logo?: string;
   };
   generator?: string;
+  categories?: string[];
 }
 
 interface CustomItem {
+  [key: string]: unknown;
   title?: string;
   content?: string;
   contentSnippet?: string;
@@ -35,8 +38,15 @@ interface CustomItem {
 // Create a custom parser instance for rss-parser
 const rssParser = new RssParser({
   customFields: {
-    feed: ["generator", "publisher", "lastBuildDate"],
-    item: ["author", "content", "contentSnippet", "creator", "encoded"],
+    feed: ["generator", "publisher", "lastBuildDate", "category"],
+    item: [
+      "author",
+      "content",
+      "contentSnippet",
+      "creator",
+      "encoded",
+      "category",
+    ],
   },
   xml2js: {
     // Improve namespace handling
@@ -100,8 +110,15 @@ export async function fetchFeed(feedUrl: string): Promise<CustomFeed | null> {
       // Better parser configuration for handling various RSS formats
       const parser = new RssParser({
         customFields: {
-          feed: ["generator", "publisher", "lastBuildDate"],
-          item: ["author", "content", "contentSnippet", "creator", "encoded"],
+          feed: ["generator", "publisher", "lastBuildDate", "category"],
+          item: [
+            "author",
+            "content",
+            "contentSnippet",
+            "creator",
+            "encoded",
+            "category",
+          ],
         },
         xml2js: {
           // More robust XML parsing options
@@ -137,6 +154,17 @@ export async function fetchFeed(feedUrl: string): Promise<CustomFeed | null> {
 
         return item;
       });
+
+      // Extract feed-level categories
+      let feedCategories: string[] = [];
+      if ((feed as any).category) {
+        if (Array.isArray((feed as any).category)) {
+          feedCategories = (feed as any).category as string[];
+        } else {
+          feedCategories = [(feed as any).category as string];
+        }
+      }
+      (feed as any).categories = feedCategories.filter(Boolean);
 
       return feed as unknown as CustomFeed;
     } catch (rssParseError) {
@@ -236,6 +264,21 @@ async function parseAlternative(
               : "",
         };
       }
+
+      // Extract feed-level categories
+      const fallbackCategories: string[] = [];
+      if (channel.category) {
+        if (Array.isArray(channel.category)) {
+          for (const cat of channel.category as Array<unknown>) {
+            const text = extractTextContent(cat);
+            if (text) fallbackCategories.push(text);
+          }
+        } else {
+          const text = extractTextContent(channel.category);
+          if (text) fallbackCategories.push(text);
+        }
+      }
+      (feed as any).categories = fallbackCategories;
 
       // Handle items
       const items = Array.isArray(channel.item)
@@ -587,311 +630,43 @@ function normalizeAtomEntry(entry: Record<string, unknown>): CustomItem {
 }
 
 /**
+ * Bulk-upsert helper: Inserts distinct names and returns a name→ID map
+ */
+async function upsertNames(
+  table: string,
+  keyCol: string,
+  names: string[],
+): Promise<Record<string, number>> {
+  const uniq = Array.from(new Set(names));
+  if (!uniq.length) return {};
+  const placeholders = uniq.map(() => "(?)").join(",");
+  await executeQuery({
+    query: `INSERT IGNORE INTO ${table} (${keyCol}) VALUES ${placeholders}`,
+    values: uniq,
+  });
+  const rows: Array<{ id: number; name: string }> = await executeQuery({
+    query: `
+      SELECT ${table.slice(0, -1)}ID AS id, ${keyCol} AS name
+      FROM ${table}
+      WHERE ${keyCol} IN (?)
+    `,
+    values: [uniq],
+  });
+  return rows.reduce(
+    (m, r) => ((m[r.name] = r.id), m),
+    {} as Record<string, number>,
+  );
+}
+
+/**
  * Process and save a feed to the database
  */
 export async function processFeed(
   feedUrl: string,
   userId?: number,
 ): Promise<{ success: boolean; message: string; feedId?: number }> {
-  try {
-    // 1. First check if the feed already exists
-    const existingFeeds = await executeQuery({
-      query: "SELECT FeedID, Title FROM Feeds WHERE FeedURL = ?",
-      values: [feedUrl],
-    });
-
-    let feedId: number;
-    const feed = await fetchFeed(feedUrl);
-
-    if (!feed || !feed.items) {
-      // Check if feed or items are null/undefined
-      return {
-        success: false,
-        message:
-          "Could not fetch or parse feed. The URL might be invalid or the feed structure unrecognized.",
-      };
-    }
-
-    // 2. If feed doesn't exist, add it to the database
-    if (!Array.isArray(existingFeeds) || existingFeeds.length === 0) {
-      const feedResult = await executeQuery({
-        query:
-          "INSERT INTO Feeds (FeedURL, Title, Description, LastFetchedAt) VALUES (?, ?, ?, NOW())",
-        values: [
-          feedUrl,
-          feed.title || "Untitled Feed",
-          feed.description || "",
-        ],
-      });
-
-      // Type guard for MariaDB insert results
-      if (
-        !feedResult ||
-        typeof feedResult !== "object" ||
-        !("insertId" in feedResult) ||
-        typeof feedResult.insertId !== "number"
-      ) {
-        return {
-          success: false,
-          message: "Failed to save feed to database (invalid result)",
-        };
-      }
-
-      feedId = feedResult.insertId;
-      console.log(`New feed added with ID ${feedId}`);
-    } else {
-      feedId = existingFeeds[0].FeedID;
-
-      // Update the feed title and description if they've changed, and update LastFetchedAt
-      await executeQuery({
-        query:
-          "UPDATE Feeds SET Title = ?, Description = ?, LastFetchedAt = NOW() WHERE FeedID = ?",
-        values: [
-          feed.title || existingFeeds[0].Title || "Untitled Feed",
-          feed.description || "",
-          feedId,
-        ],
-      });
-
-      console.log(
-        `Using existing feed with ID ${feedId}, updated LastFetchedAt.`,
-      );
-    }
-
-    // 3. If userId is provided, subscribe the user to the feed
-    if (userId) {
-      try {
-        await executeQuery({
-          query:
-            "INSERT IGNORE INTO Subscriptions (UserID, FeedID) VALUES (?, ?)",
-          values: [userId, feedId],
-        });
-        console.log(
-          `User ${userId} subscribed or already subscribed to feed ${feedId}`,
-        );
-      } catch (subError) {
-        // Catch specific subscription error
-        console.error(
-          `Error subscribing user ${userId} to feed ${feedId}:`,
-          subError,
-        );
-        // Decide if this should halt processing or just be logged
-      }
-    }
-
-    // 4. Process the publisher (if found)
-    let publisherId: number | null = null;
-    if (feed.publisher && feed.publisher.name) {
-      try {
-        const publishers = await executeQuery({
-          query: "SELECT PublisherID FROM Publishers WHERE Name = ?",
-          values: [feed.publisher.name],
-        });
-
-        if (Array.isArray(publishers) && publishers.length > 0) {
-          publisherId = publishers[0].PublisherID;
-        } else {
-          const publisherResult = await executeQuery({
-            query:
-              "INSERT INTO Publishers (Name, Website, LogoURL, RSSMetadata) VALUES (?, ?, ?, ?)",
-            values: [
-              feed.publisher.name,
-              feed.publisher.url || feed.link || "",
-              feed.publisher.logo || "",
-              feed.generator || "",
-            ],
-          });
-
-          if (
-            publisherResult &&
-            typeof publisherResult === "object" &&
-            "insertId" in publisherResult &&
-            typeof publisherResult.insertId === "number"
-          ) {
-            publisherId = publisherResult.insertId;
-            console.log(
-              `Added new publisher '${feed.publisher.name}' with ID ${publisherId}`,
-            );
-          } else {
-            console.log(`Failed to insert publisher: ${feed.publisher.name}`);
-          }
-        }
-      } catch (pubError) {
-        console.error(
-          `Error processing publisher '${feed.publisher.name}':`,
-          pubError,
-        );
-      }
-    }
-
-    // 5. Process each item in the feed
-    let newItemCount = 0;
-    for (const item of feed.items) {
-      // feed.items is now guaranteed to be an array
-      // Use a stricter check for guid/link presence
-      const guid = item.guid || item.link || null; // Default to null if both missing
-      if (!guid) {
-        console.log(
-          "Skipping item without guid or link:",
-          item.title || "(no title)",
-        );
-        continue;
-      }
-
-      try {
-        // Check if this item already exists
-        const existingItems = await executeQuery({
-          query: "SELECT ItemID FROM FeedItems WHERE FeedID = ? AND GUID = ?",
-          values: [feedId, guid], // guid is now guaranteed not to be undefined
-        });
-
-        if (Array.isArray(existingItems) && existingItems.length > 0) {
-          // Skip items that already exist
-          continue;
-        }
-
-        // Parse publication date
-        let pubDate: string | null = null;
-        if (item.pubDate) {
-          try {
-            const date = new Date(item.pubDate);
-            if (!isNaN(date.getTime())) {
-              // Format for MariaDB DATETIME
-              pubDate = date.toISOString().slice(0, 19).replace("T", " ");
-            } else {
-              console.log(
-                `Invalid date format for item: ${item.title || "(no title)"} - Date: ${item.pubDate}`,
-              );
-            }
-          } catch (dateParseError) {
-            // Catch specific date parsing error
-            console.log(
-              `Error parsing date for item: ${item.title || "(no title)"} - Date: ${item.pubDate}`,
-              dateParseError,
-            );
-          }
-        }
-
-        // Add new item
-        const itemResult = await executeQuery({
-          query: `
-              INSERT INTO FeedItems (FeedID, Title, Content, PubDate, GUID, Link)
-              VALUES (?, ?, ?, ?, ?, ?)
-            `,
-          values: [
-            feedId,
-            item.title || "Untitled Item",
-            item.content || item.contentSnippet || "",
-            pubDate, // Can be null if parsing failed or date was invalid
-            guid, // Use the non-undefined guid
-            item.link || "", // Ensure link is provided
-          ],
-        });
-
-        if (
-          !itemResult ||
-          typeof itemResult !== "object" ||
-          !("insertId" in itemResult) ||
-          typeof itemResult.insertId !== "number"
-        ) {
-          console.log(`Failed to save item: ${item.title || "(no title)"}`);
-          continue; // Skip author/publisher processing for this failed item
-        }
-
-        const itemId = itemResult.insertId;
-        newItemCount++;
-
-        // Process author information
-        // Use const for authors array as it's not reassigned
-        const authors = item.authors?.filter(Boolean) || [];
-        // No need to check item.author separately if normalizeItem handles it correctly
-
-        for (const authorName of authors) {
-          // No need for 'if (!authorName) continue;' because filter(Boolean) handles it
-          try {
-            // Look up or create author
-            const existingAuthors = await executeQuery({
-              query: "SELECT AuthorID FROM Authors WHERE Name = ?",
-              values: [authorName],
-            });
-
-            let authorId: number;
-            if (Array.isArray(existingAuthors) && existingAuthors.length > 0) {
-              authorId = existingAuthors[0].AuthorID;
-            } else {
-              const authorResult = await executeQuery({
-                query: "INSERT INTO Authors (Name) VALUES (?)",
-                values: [authorName],
-              });
-
-              if (
-                !authorResult ||
-                typeof authorResult !== "object" ||
-                !("insertId" in authorResult) ||
-                typeof authorResult.insertId !== "number"
-              ) {
-                console.log(`Failed to save author: ${authorName}`);
-                continue; // Skip linking this author
-              }
-              authorId = authorResult.insertId;
-            }
-
-            // Create link between item and author
-            await executeQuery({
-              query:
-                "INSERT IGNORE INTO FeedItemAuthors (ItemID, AuthorID) VALUES (?, ?)",
-              values: [itemId, authorId],
-            });
-          } catch (authorError) {
-            console.error(
-              `Error processing author '${authorName}' for item ${itemId}:`,
-              authorError,
-            );
-          }
-        }
-
-        // If we have a publisher, link it to the item
-        if (publisherId) {
-          try {
-            await executeQuery({
-              query:
-                "INSERT IGNORE INTO FeedItemPublishers (ItemID, PublisherID) VALUES (?, ?)",
-              values: [itemId, publisherId],
-            });
-          } catch (itemPubError) {
-            console.error(
-              `Error linking item ${itemId} to publisher ${publisherId}:`,
-              itemPubError,
-            );
-          }
-        }
-      } catch (itemProcessingError) {
-        console.error(
-          `Error processing item with GUID ${guid} for feed ${feedId}:`,
-          itemProcessingError,
-        );
-        // Continue to the next item even if one fails
-      }
-    }
-
-    console.log(
-      `Feed processing finished for ${feedUrl}. ${newItemCount} new items added.`,
-    );
-    return {
-      success: true,
-      message: `Feed processed. ${newItemCount} new items added.`,
-      feedId,
-    };
-  } catch (error: unknown) {
-    // Catch top-level errors
-    console.error(`Feed processing failed entirely for ${feedUrl}:`, error);
-    return {
-      success: false,
-      message: `Error processing feed: ${error instanceof Error ? error.message : "Unknown error"}`,
-    };
-  }
+  return comprehensiveFeedProcessor(feedUrl, userId);
 }
-
 /**
  * Get recent feed items for a user, based on their subscriptions
  */
@@ -964,7 +739,7 @@ export async function getUserSubscriptions(userId: number) {
 
     // Properly format the data for the frontend
     const formattedSubscriptions = resultsArray.map((sub) => ({
-      FeedID: sub.FeedID,
+      FeedID: Number(sub.FeedID),
       Title: sub.Title || "Untitled Feed",
       Description: sub.Description || "",
       FeedURL: sub.FeedURL,
