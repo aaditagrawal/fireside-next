@@ -294,10 +294,15 @@ export async function comprehensiveFeedProcessor(
 
         // 7. Process item categories
         if (item.categories && item.categories.length > 0) {
-          const categories = item.categories;
-          for (const name of categories) {
-            // Changed from 'cats' to 'categories'
-            if (!name.trim()) continue;
+          const normalizedCategories = (item.categories as any[])
+            .map(raw => typeof raw === 'string'
+              ? raw
+              : raw && typeof raw === 'object' && 'content' in raw
+                ? (raw as any).content
+                : String(raw))
+            .map(s => s.trim())
+            .filter(Boolean);
+          for (const name of normalizedCategories) {
 
             // Get or create category
             let categoryId: number;

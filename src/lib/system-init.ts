@@ -1,5 +1,6 @@
 import { initCronJobs } from "./cron-jobs";
 import { executeQuery } from "./db";
+import { createStoredProcedures } from "./db-procedures";
 
 /**
  * Initialize the RSS aggregator system
@@ -36,6 +37,9 @@ export async function initializeSystem() {
       ? tables.map((t) => Object.values(t)[0])
       : [];
 
+    await createStoredProcedures();
+    console.log("✅ Stored procedures initialized");
+
     const requiredTables = [
       "Users",
       "Feeds",
@@ -64,6 +68,9 @@ export async function initializeSystem() {
     } else {
       console.log("✅ Admin user verified");
     }
+
+    console.log("RSS aggregator system initialization complete");
+    return { success: true, message: "System initialized successfully" };
 
     console.log("RSS aggregator system initialization complete");
     return { success: true, message: "System initialized successfully" };

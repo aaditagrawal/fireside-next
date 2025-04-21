@@ -12,6 +12,7 @@ import { FeedRecommendations } from "@/components/feed-recommendations";
 import { AddFeedForm } from "@/components/add-feed-form";
 import { ReadingActivityChart } from "@/components/reading-activity-chart";
 import { CategoryRadarChart } from "@/components/category-radar-chart";
+import { UserEngagementMetrics } from "@/components/user-engagement-metrics";
 
 import {
   Breadcrumb,
@@ -271,9 +272,10 @@ export default function DashboardPage() {
           <DashboardStats userId={user.id} />
 
           {/* Data Visualization Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <ReadingActivityChart userId={user.id} />
             <CategoryRadarChart userId={user.id} />
+            <UserEngagementMetrics userId={user.id} />
           </div>
 
           {/* Main Content Grid */}
