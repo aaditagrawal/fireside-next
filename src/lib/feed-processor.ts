@@ -475,7 +475,7 @@ export async function generateRecommendations(userId: number) {
 
     // Update or insert recommendations
     for (const category of userCategories) {
-      const frecencyScore = category.EngagementCount * 0.1; // Simple scoring
+      const frecencyScore = Number(category.EngagementCount) * 0.1; // Simple scoring
 
       // Check if recommendation exists
       const existingRec = await executeQuery({

@@ -24,7 +24,6 @@ export function NavCategories({
 }: {
   categories: {
     name: string;
-    emoji: string;
   }[];
 }) {
   const { isMobile } = useSidebar();
@@ -38,14 +37,8 @@ export function NavCategories({
       <SidebarMenu>
         {categories.map((category) => (
           <SidebarMenuItem key={category.name}>
-            <SidebarMenuButton asChild>
-              <a
-                href={`/categories/${category.name.toLowerCase()}`}
-                title={category.name}
-              >
-                <span>{category.emoji}</span>
-                <span>{category.name}</span>
-              </a>
+            <SidebarMenuButton>
+              <span>{category.name}</span>
             </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

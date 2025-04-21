@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AppSidebar } from "@/components/app-sidebar";
 import { NavActions } from "@/components/nav-actions";
 import { LogoutButton } from "@/components/logout-button";
@@ -361,12 +362,12 @@ export default function DashboardPage() {
 
               {/* Useful Links */}
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" asChild>
-                  <a href="/articles">All Articles</a>
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <a href="/feeds">Manage Feeds</a>
-                </Button>
+                <Link href="/articles">
+                  <Button variant="outline" size="sm">All Articles</Button>
+                </Link>
+                <Link href="/feeds">
+                  <Button variant="outline" size="sm">Manage Feeds</Button>
+                </Link>
               </div>
             </div>
           </div>

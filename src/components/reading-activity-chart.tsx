@@ -43,11 +43,11 @@ const chartConfig = {
   },
   readCount: {
     label: "Articles Read",
-    color: "hsl(var(--chart-1))",
+    color: "var(--chart-1)",
   },
   savedCount: {
     label: "Articles Saved",
-    color: "hsl(var(--chart-2))",
+    color: "var(--chart-2)",
   },
 } satisfies ChartConfig;
 

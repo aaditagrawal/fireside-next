@@ -169,9 +169,9 @@ export function FeedRecommendations({ userId }: FeedRecommendationsProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {recommendations.slice(0, 5).map((feed) => (
+          {recommendations.slice(0, 5).map((feed, idx) => (
             <div
-              key={feed.FeedID}
+              key={`${feed.FeedID}-${idx}`}
               className="flex justify-between items-start border-b pb-4 last:border-0 last:pb-0"
             >
               <div className="flex-1 space-y-1">

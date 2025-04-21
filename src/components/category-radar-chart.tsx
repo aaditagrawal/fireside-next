@@ -32,7 +32,7 @@ interface CategoryRadarChartProps {
 const chartConfig = {
   count: {
     label: "Article Count",
-    color: "hsl(var(--chart-1))",
+    color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
@@ -113,7 +113,7 @@ export function CategoryRadarChart({ userId }: CategoryRadarChartProps) {
                 cursor={false}
                 content={<ChartTooltipContent hideLabel />}
               />
-              <PolarGrid className="fill-[--color-count] opacity-20" />
+              <PolarGrid fill="var(--color-count)" fillOpacity={0.2} />
               <PolarAngleAxis dataKey="category" />
               <Radar
                 dataKey="count"
