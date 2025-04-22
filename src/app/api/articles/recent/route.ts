@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     // Recent articles from user's subscriptions
     const query = `
-      SELECT
+      SELECT DISTINCT
         fi.ItemID,
         fi.Title,
         fi.Content,
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         f.Title AS FeedTitle,
         GROUP_CONCAT(DISTINCT a.Name SEPARATOR ', ') AS Authors,
         p.Name AS PublisherName,
-        c.Name AS CategoryName
+        GROUP_CONCAT(DISTINCT c.Name SEPARATOR ', ') AS CategoryName
       FROM FeedItems fi
       JOIN Feeds f ON fi.FeedID = f.FeedID
       JOIN Subscriptions s ON f.FeedID = s.FeedID
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN Categories c ON fc.CategoryID = c.CategoryID
       WHERE s.UserID = ?
       GROUP BY fi.ItemID, fi.Title, fi.Content, fi.PubDate, fi.Link, ufi.IsRead, ufi.IsSaved,
-               f.FeedID, f.Title, p.Name, c.Name
+               f.FeedID, f.Title, p.Name
       ORDER BY fi.PubDate DESC, fi.ItemID DESC
       LIMIT 15
     `;

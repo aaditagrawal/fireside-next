@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -50,18 +50,43 @@ export function ArticleCarousel({
   emptyMessage = "No articles found",
   carouselId,
 }: ArticleCarouselProps) {
-  // State for carousel position
-  const [activeIndex, setActiveIndex] = React.useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
 
   // Function to scroll carousel
   const scroll = (direction: "left" | "right") => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const scrollAmount = 320; // Card width + gap
+    const currentScroll = container.scrollLeft;
+
     if (direction === "left") {
-      setActiveIndex((prev) => Math.max(0, prev - 1));
+      container.scrollTo({
+        left: currentScroll - scrollAmount,
+        behavior: "smooth",
+      });
     } else {
-      setActiveIndex((prev) =>
-        Math.min(Math.max(0, articles.length - 3), prev + 1),
-      );
+      container.scrollTo({
+        left: currentScroll + scrollAmount,
+        behavior: "smooth",
+      });
     }
+  };
+
+  // Update scroll buttons state on scroll
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Check if we can scroll left
+    setCanScrollLeft(container.scrollLeft > 0);
+
+    // Check if we can scroll right
+    setCanScrollRight(
+      container.scrollLeft < container.scrollWidth - container.clientWidth - 5,
+    );
   };
 
   // Create a simple content snippet
@@ -158,7 +183,7 @@ export function ArticleCarousel({
             variant="outline"
             size="icon"
             onClick={() => scroll("left")}
-            disabled={activeIndex === 0}
+            disabled={!canScrollLeft}
             aria-label="Previous articles"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -167,7 +192,7 @@ export function ArticleCarousel({
             variant="outline"
             size="icon"
             onClick={() => scroll("right")}
-            disabled={activeIndex >= articles.length - 3}
+            disabled={!canScrollRight}
             aria-label="Next articles"
           >
             <ChevronRight className="h-4 w-4" />
@@ -177,8 +202,10 @@ export function ArticleCarousel({
       <CardContent>
         <div
           id={carouselId}
-          className="flex space-x-4 overflow-hidden transition-transform duration-300 ease-in-out"
-          style={{ transform: `translateX(-${activeIndex * 316}px)` }}
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex space-x-4 overflow-x-auto pb-2 scrollbar-hide"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {articles.map((article, index) => (
             <Link

@@ -6,7 +6,6 @@ DECLARE favorite_category VARCHAR(255);
 
 DECLARE avg_daily_reads DECIMAL(10, 2);
 
--- Calculate total reads
 SELECT
     COUNT(*) INTO total_reads
 FROM
@@ -15,7 +14,6 @@ WHERE
     UserID = user_id
     AND Type = 'read';
 
--- Calculate total saves
 SELECT
     COUNT(*) INTO total_saves
 FROM
@@ -42,7 +40,6 @@ ORDER BY
 LIMIT
     1;
 
--- Calculate average daily reads over the last 30 days
 SELECT
     COALESCE(COUNT(*) / 30, 0) INTO avg_daily_reads
 FROM
@@ -52,13 +49,11 @@ WHERE
     AND Type = 'read'
     AND Timestamp >= DATE_SUB (CURDATE (), INTERVAL 30 DAY);
 
--- Return results
 SELECT
     total_reads AS TotalReads,
     total_saves AS TotalSaves,
     favorite_category AS FavoriteCategory,
     avg_daily_reads AS AvgDailyReads,
-    -- Calculate engagement score using procedural logic
     CASE
         WHEN total_reads > 100
         AND total_saves > 20 THEN 'Power User'
@@ -67,7 +62,6 @@ SELECT
         WHEN total_reads > 0 THEN 'Casual Reader'
         ELSE 'New User'
     END AS EngagementLevel,
-    -- Calculate engagement score (numeric)
     (total_reads * 1) + (total_saves * 5) + (avg_daily_reads * 10) AS EngagementScore;
 
 END / / DELIMITER;

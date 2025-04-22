@@ -37,52 +37,46 @@ The database uses a relational schema with tables for:
 - Content publishers and authors
 
 ## UML Block Diagram
+```mermaid
+flowchart TB
+    Client["Client Browser"]
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Client Browser                                │
-└───────────────────────────────┬─────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       Next.js Application                            │
-│  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐    │
-│  │  Components     │   │  Pages / Routes  │   │   Middleware    │    │
-│  │                 │   │                 │   │                 │    │
-│  │ - app-sidebar   │   │ - page.tsx      │   │ - Authentication│    │
-│  │ - feed-item-list│   │ - dashboard     │   │ - API Routes    │    │
-│  │ - article-viewer│   │ - login         │   │   Protection    │    │
-│  │ - login-form    │   │ - feeds         │   │                 │    │
-│  │ - signup-form   │   │ - articles      │   │                 │    │
-│  └─────────────────┘   └─────────────────┘   └─────────────────┘    │
-└──────────────┬──────────────────────┬───────────────────┬───────────┘
-               │                      │                   │
-               ▼                      ▼                   ▼
-┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
-│  Auth Services      │  │  RSS Services        │  │  Data Services      │
-│                     │  │                      │  │                     │
-│ - User Registration │  │ - Feed Fetching      │  │ - DB Queries        │
-│ - Login/Logout      │  │ - Feed Parsing       │  │ - Data Procedures   │
-│ - Session Management│  │ - Content Processing │  │ - Schema Management │
-└──────────┬──────────┘  └──────────┬──────────┘  └──────────┬──────────┘
-           │                        │                        │
-           └────────────────────────┼────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                           Database Layer                             │
-│                                                                     │
-│  ┌─────────────┐ ┌──────────────┐ ┌────────────┐ ┌───────────────┐  │
-│  │  Users      │ │  Feeds       │ │ FeedItems  │ │ Interactions  │  │
-│  │             │ │              │ │            │ │               │  │
-│  └─────────────┘ └──────────────┘ └────────────┘ └───────────────┘  │
-│                                                                     │
-│  ┌─────────────┐ ┌──────────────┐ ┌────────────┐ ┌───────────────┐  │
-│  │ Publishers  │ │ Categories   │ │  Authors   │ │Recommendations │  │
-│  │             │ │              │ │            │ │               │  │
-│  └─────────────┘ └──────────────┘ └────────────┘ └───────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-```
+    subgraph NextApp["Next.js Application"]
+        Components["Components<br>- app-sidebar<br>- feed-item-list<br>- article-viewer<br>- login-form<br>- signup-form"]
+        Pages["Pages / Routes<br>- page.tsx<br>- dashboard<br>- login<br>- feeds<br>- articles"]
+        Middleware["Middleware<br>- Authentication<br>- API Routes<br>Protection"]
+    end
+
+    subgraph Services["Service Layer"]
+        Auth["Auth Services<br>- User Registration<br>- Login/Logout<br>- Session Management"]
+        RSS["RSS Services<br>- Feed Fetching<br>- Feed Parsing<br>- Content Processing"]
+        Data["Data Services<br>- DB Queries<br>- Data Procedures<br>- Schema Management"]
+    end
+
+    subgraph DB["Database Layer"]
+        Users["Users"]
+        Feeds["Feeds"]
+        FeedItems["FeedItems"]
+        Interactions["Interactions"]
+        Publishers["Publishers"]
+        Categories["Categories"]
+        Authors["Authors"]
+        Recommendations["Recommendations"]
+    end
+
+    Client --> NextApp
+    Components --> Auth
+    Components --> RSS
+    Components --> Data
+    Pages --> Auth
+    Pages --> RSS
+    Pages --> Data
+    Middleware --> Auth
+    Middleware --> Data
+
+    Auth --> DB
+    RSS --> DB
+    Data --> DB
 
 ## Key Implementation Details
 
@@ -138,4 +132,4 @@ The database uses a relational schema with tables for:
 2. Session-based authentication with secure cookies
 3. Input validation and sanitization
 4. SQL injection protection via parameterized queries
-5. Role-based access control for protected operations 
+5. Role-based access control for protected operations

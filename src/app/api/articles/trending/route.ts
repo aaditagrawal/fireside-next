@@ -23,65 +23,75 @@ export async function GET(request: NextRequest) {
 
     // Trending algorithm based on recent interactions from all users
     const query = `
-      WITH ArticleInteractions AS (
+      WITH InteractionCounts AS (
         SELECT
+          i.ItemID,
+          COUNT(DISTINCT i.InteractionID) AS InteractionCount,
+          COUNT(DISTINCT i.UserID) AS UserCount,
+          MAX(i.Timestamp) AS LatestInteraction
+        FROM Interactions i
+        WHERE i.Timestamp > DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY i.ItemID
+      ),
+
+      RankedArticles AS (
+        SELECT
+          ic.ItemID,
+          ic.InteractionCount,
+          ic.UserCount,
+          ic.LatestInteraction,
+          (
+            (ic.InteractionCount * 0.5) +
+            (ic.UserCount * 1.5) +
+            (10 / (1 + TIMESTAMPDIFF(HOUR, ic.LatestInteraction, NOW())/24))
+          ) AS TrendingScore
+        FROM InteractionCounts ic
+      ),
+
+      ArticleDetails AS (
+        SELECT DISTINCT
           fi.ItemID,
           fi.Title,
           fi.Content,
           fi.PubDate,
           fi.Link,
-          (SELECT IsRead FROM User_FeedItems WHERE UserID = ? AND ItemID = fi.ItemID) AS IsRead,
-          (SELECT IsSaved FROM User_FeedItems WHERE UserID = ? AND ItemID = fi.ItemID) AS IsSaved,
           f.FeedID,
           f.Title AS FeedTitle,
-          COUNT(DISTINCT i.InteractionID) AS InteractionCount,
-          (
-            -- Calculate a score based on recency and interaction count
-            COUNT(DISTINCT i.InteractionID) *
-            (1 / (1 + TIMESTAMPDIFF(HOUR, MAX(i.Timestamp), NOW())/24))
-          ) AS TrendingScore
-        FROM FeedItems fi
+          COALESCE(ufi.IsRead, 0) AS IsRead,
+          COALESCE(ufi.IsSaved, 0) AS IsSaved,
+          ra.TrendingScore,
+          GROUP_CONCAT(DISTINCT c.Name SEPARATOR ', ') AS CategoryName
+        FROM RankedArticles ra
+        JOIN FeedItems fi ON ra.ItemID = fi.ItemID
         JOIN Feeds f ON fi.FeedID = f.FeedID
-        JOIN Subscriptions s ON f.FeedID = s.FeedID
-        JOIN Interactions i ON fi.ItemID = i.ItemID
-        WHERE s.UserID = ?
-          AND i.Timestamp > DATE_SUB(NOW(), INTERVAL 3 DAY)
-        GROUP BY fi.ItemID, fi.Title, fi.Content, fi.PubDate, fi.Link, f.FeedID, f.Title
+        LEFT JOIN User_FeedItems ufi ON fi.ItemID = ufi.ItemID AND ufi.UserID = ?
+        LEFT JOIN Feed_Categories fc ON f.FeedID = fc.FeedID
+        LEFT JOIN Categories c ON fc.CategoryID = c.CategoryID
+        GROUP BY fi.ItemID, fi.Title, fi.Content, fi.PubDate, fi.Link,
+                f.FeedID, f.Title, ufi.IsRead, ufi.IsSaved, ra.TrendingScore
+        ORDER BY ra.TrendingScore DESC
+        LIMIT 12
       )
 
       SELECT
-        ai.ItemID,
-        ai.Title,
-        ai.Content,
-        ai.PubDate,
-        ai.Link,
-        COALESCE(ai.IsRead, 0) AS IsRead,
-        COALESCE(ai.IsSaved, 0) AS IsSaved,
-        ai.FeedID,
-        ai.FeedTitle,
+        ad.*,
         GROUP_CONCAT(DISTINCT a.Name SEPARATOR ', ') AS Authors,
-        p.Name AS PublisherName,
-        c.Name AS CategoryName,
-        ai.TrendingScore
-      FROM ArticleInteractions ai
-      LEFT JOIN FeedItemAuthors fia ON ai.ItemID = fia.ItemID
+        p.Name AS PublisherName
+      FROM ArticleDetails ad
+      LEFT JOIN FeedItemAuthors fia ON ad.ItemID = fia.ItemID
       LEFT JOIN Authors a ON fia.AuthorID = a.AuthorID
-      LEFT JOIN FeedItemPublishers fip ON ai.ItemID = fip.ItemID
+      LEFT JOIN FeedItemPublishers fip ON ad.ItemID = fip.ItemID
       LEFT JOIN Publishers p ON fip.PublisherID = p.PublisherID
-      LEFT JOIN Feed_Categories fc ON ai.FeedID = fc.FeedID
-      LEFT JOIN Categories c ON fc.CategoryID = c.CategoryID
-      GROUP BY ai.ItemID, ai.Title, ai.Content, ai.PubDate, ai.Link, ai.IsRead, ai.IsSaved,
-               ai.FeedID, ai.FeedTitle, p.Name, c.Name, ai.TrendingScore
-      ORDER BY ai.TrendingScore DESC
-      LIMIT 10
+      GROUP BY ad.ItemID, ad.Title, ad.Content, ad.PubDate, ad.Link,
+               ad.FeedID, ad.FeedTitle, ad.IsRead, ad.IsSaved, ad.TrendingScore, ad.CategoryName
+      ORDER BY ad.TrendingScore DESC
     `;
 
     const articles = await executeQuery({
       query: query,
-      values: [user.id, user.id, user.id],
+      values: [user.id],
     });
 
-    // Format articles
     const formattedArticles = Array.isArray(articles)
       ? articles.map((article) => ({
           ItemID: article.ItemID,

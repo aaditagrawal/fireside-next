@@ -1,10 +1,8 @@
 import mariadb from "mariadb";
 import dotenv from "dotenv";
 
-// Load environment variables from .env file
 dotenv.config();
 
-// Define error interfaces for proper typing
 interface DatabaseError extends Error {
   code?: string;
   message: string;
@@ -14,7 +12,6 @@ interface TableRecord {
   [key: string]: string;
 }
 
-// --- Database Configuration ---
 const dbConfig = {
   host: process.env.MYSQL_HOST || "127.0.0.1",
   port: parseInt(process.env.MYSQL_PORT || "3306"),
@@ -25,8 +22,6 @@ const dbConfig = {
   multipleStatements: true,
 };
 
-// --- SQL Statements ---
-// Tables are dropped in reverse order of their dependencies
 const dropStatements: string[] = [
   `DROP TABLE IF EXISTS User_FeedItems`,
   `DROP TABLE IF EXISTS Feed_Categories`,
@@ -47,7 +42,6 @@ const dropStatements: string[] = [
 ];
 
 const createStatements: string[] = [
-  // Users table
   `CREATE TABLE Users (
     UserID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(255) NOT NULL,
@@ -58,7 +52,6 @@ const createStatements: string[] = [
     LastLogin DATETIME NULL
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // User_Role table - for multi-valued roles
   `CREATE TABLE User_Role (
     UserID INT UNSIGNED NOT NULL,
     Role VARCHAR(50) NOT NULL,
@@ -66,7 +59,6 @@ const createStatements: string[] = [
     FOREIGN KEY (UserID) REFERENCES Users(UserID) ON DELETE CASCADE ON UPDATE CASCADE
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // UserSessions table for auth
   `CREATE TABLE UserSessions (
     SessionID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     UserID INT UNSIGNED NOT NULL,
@@ -76,7 +68,6 @@ const createStatements: string[] = [
     FOREIGN KEY (UserID) REFERENCES Users(UserID) ON DELETE CASCADE
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // Authors table
   `CREATE TABLE Authors (
     AuthorID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(255) NOT NULL,
@@ -86,7 +77,6 @@ const createStatements: string[] = [
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
   `ALTER TABLE Authors ADD INDEX idx_author_name (Name)`,
 
-  // Publishers table
   `CREATE TABLE Publishers (
     PublisherID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(255) NOT NULL,
@@ -96,7 +86,6 @@ const createStatements: string[] = [
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
   `ALTER TABLE Publishers ADD INDEX idx_publisher_name (Name)`,
 
-  // Categories table with self-reference
   `CREATE TABLE Categories (
     CategoryID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(255) NOT NULL UNIQUE,
@@ -105,7 +94,6 @@ const createStatements: string[] = [
     FOREIGN KEY (ParentCategoryID) REFERENCES Categories(CategoryID) ON DELETE SET NULL ON UPDATE CASCADE
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // Feeds table
   `CREATE TABLE Feeds (
     FeedID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     FeedURL VARCHAR(2048) NOT NULL UNIQUE,
@@ -116,7 +104,6 @@ const createStatements: string[] = [
     FOREIGN KEY (PublisherID) REFERENCES Publishers(PublisherID) ON DELETE SET NULL ON UPDATE CASCADE
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // FeedItems table
   `CREATE TABLE FeedItems (
     ItemID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     FeedID INT UNSIGNED NOT NULL,
@@ -133,7 +120,6 @@ const createStatements: string[] = [
   `ALTER TABLE FeedItems ADD INDEX idx_feeditems_pubdate (PubDate)`,
   `ALTER TABLE FeedItems ADD INDEX idx_feeditems_fetchedat (FetchedAt)`,
 
-  // Subscriptions table
   `CREATE TABLE Subscriptions (
     SubscriptionID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     UserID INT UNSIGNED NOT NULL,
@@ -144,7 +130,6 @@ const createStatements: string[] = [
     UNIQUE KEY unique_user_feed (UserID, FeedID)
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // Interactions table
   `CREATE TABLE Interactions (
     InteractionID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     UserID INT UNSIGNED NOT NULL,
@@ -156,7 +141,6 @@ const createStatements: string[] = [
     INDEX idx_interactions_user_item (UserID, ItemID)
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // Notes table
   `CREATE TABLE Notes (
     NoteID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     UserID INT UNSIGNED NOT NULL,
@@ -168,7 +152,6 @@ const createStatements: string[] = [
     INDEX idx_notes_user_item (UserID, ItemID)
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // Recommendations table
   `CREATE TABLE Recommendations (
     RecommendationID INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     UserID INT UNSIGNED NOT NULL,
@@ -180,7 +163,6 @@ const createStatements: string[] = [
     INDEX idx_recommendations_user (UserID)
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // FeedItemAuthors bridge table (N-to-N)
   `CREATE TABLE FeedItemAuthors (
     ItemID INT UNSIGNED NOT NULL,
     AuthorID INT UNSIGNED NOT NULL,
@@ -189,7 +171,6 @@ const createStatements: string[] = [
     FOREIGN KEY (AuthorID) REFERENCES Authors(AuthorID) ON DELETE CASCADE ON UPDATE CASCADE
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // FeedItemPublishers bridge table (N-to-N)
   `CREATE TABLE FeedItemPublishers (
     ItemID INT UNSIGNED NOT NULL,
     PublisherID INT UNSIGNED NOT NULL,
@@ -198,7 +179,6 @@ const createStatements: string[] = [
     FOREIGN KEY (PublisherID) REFERENCES Publishers(PublisherID) ON DELETE CASCADE ON UPDATE CASCADE
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // Feed_Categories bridge table (N-to-N)
   `CREATE TABLE Feed_Categories (
     FeedID INT UNSIGNED NOT NULL,
     CategoryID INT UNSIGNED NOT NULL,
@@ -207,7 +187,6 @@ const createStatements: string[] = [
     FOREIGN KEY (CategoryID) REFERENCES Categories(CategoryID) ON DELETE CASCADE ON UPDATE CASCADE
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 
-  // User_FeedItems bridge table (for per-user item state)
   `CREATE TABLE User_FeedItems (
     UserID INT UNSIGNED NOT NULL,
     ItemID INT UNSIGNED NOT NULL,
@@ -220,7 +199,6 @@ const createStatements: string[] = [
   ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
 ];
 
-// --- Initialization Function ---
 async function initializeDatabase() {
   const pool = mariadb.createPool(dbConfig);
   let connection: mariadb.PoolConnection | undefined;
@@ -312,7 +290,6 @@ async function initializeDatabase() {
     } else {
       console.error(" -> Error details:", error.message);
     }
-    // Exit with error code if initialization fails
     process.exit(1);
   } finally {
     if (connection) {
@@ -332,5 +309,4 @@ async function initializeDatabase() {
   }
 }
 
-// --- Run the initialization ---
 initializeDatabase();
