@@ -22,17 +22,17 @@ export async function createStoredProcedures() {
             DECLARE favorite_category VARCHAR(255);
             DECLARE avg_daily_reads DECIMAL(10,2);
 
-            -- Calculate total reads
+            -- Reads
             SELECT COUNT(*) INTO total_reads
             FROM Interactions
             WHERE UserID = user_id AND Type = 'read';
 
-            -- Calculate total saves
+            -- Saves
             SELECT COUNT(*) INTO total_saves
             FROM Interactions
             WHERE UserID = user_id AND Type = 'save';
 
-            -- Find favorite category
+            -- Category
             SELECT c.Name INTO favorite_category
             FROM Interactions i
             JOIN FeedItems fi ON i.ItemID = fi.ItemID
@@ -44,14 +44,14 @@ export async function createStoredProcedures() {
             ORDER BY COUNT(*) DESC
             LIMIT 1;
 
-            -- Calculate average daily reads over the last 30 days
+            -- Avg Daily Reads
             SELECT COALESCE(COUNT(*) / 30, 0) INTO avg_daily_reads
             FROM Interactions
             WHERE UserID = user_id
             AND Type = 'read'
             AND Timestamp >= DATE_SUB(CURDATE(), INTERVAL 30 DAY);
 
-            -- Return results
+            -- Return function (to display data)
             SELECT
                 total_reads AS TotalReads,
                 total_saves AS TotalSaves,

@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
     // to find trending articles based on user interactions
     const query = `
       WITH InteractionCounts AS (
-        -- Count interactions by article in the last 7 days
         SELECT
           i.ItemID,
           COUNT(DISTINCT i.InteractionID) AS InteractionCount,
@@ -41,13 +40,11 @@ export async function GET(request: NextRequest) {
           ic.InteractionCount,
           ic.UserCount,
           ic.LatestInteraction,
-          -- Weighted score
           (
             (ic.InteractionCount * 0.5) +
             (ic.UserCount * 1.5) +
             (10 / (1 + TIMESTAMPDIFF(HOUR, ic.LatestInteraction, NOW())/24))
           ) AS TrendingScore,
-          -- Rank articles by trending score
           ROW_NUMBER() OVER (ORDER BY
             (ic.InteractionCount * 0.5) +
             (ic.UserCount * 1.5) +
@@ -82,7 +79,6 @@ export async function GET(request: NextRequest) {
         ORDER BY ra.TrendingRank
       )
 
-      -- Finally join with authors and publishers
       SELECT
         ad.*,
         GROUP_CONCAT(DISTINCT a.Name SEPARATOR ', ') AS Authors,

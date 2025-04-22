@@ -34,7 +34,6 @@ export async function POST(request: NextRequest) {
     // Find the top feeds in this category the user isn't already subscribed to
     const query = `
       WITH CategoryFeeds AS (
-        -- Get feeds in this category
         SELECT
           f.FeedID,
           f.Title,
@@ -49,13 +48,11 @@ export async function POST(request: NextRequest) {
       ),
 
       UserSubscriptions AS (
-        -- Check which feeds the user is already subscribed to
         SELECT FeedID
         FROM Subscriptions
         WHERE UserID = ?
       )
 
-      -- Select feeds the user isn't subscribed to yet
       SELECT
         cf.FeedID,
         cf.Title,
@@ -66,7 +63,6 @@ export async function POST(request: NextRequest) {
       WHERE us.FeedID IS NULL
         AND cf.ArticleCount > 0
       ORDER BY
-        -- Prioritize feeds with more content and recent updates
         cf.ArticleCount DESC,
         cf.LastArticleDate DESC
       LIMIT 5

@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
     // Uses window functions and nested CTEs
     const query = `
       WITH CategoryHistory AS (
-        -- Calculate historical article counts per category
         SELECT
           fc.CategoryID,
           COUNT(DISTINCT fi.ItemID) AS PastArticleCount
@@ -37,7 +36,6 @@ export async function GET(request: NextRequest) {
       ),
 
       RecentCategoryActivity AS (
-        -- Calculate recent article counts per category
         SELECT
           fc.CategoryID,
           COUNT(DISTINCT fi.ItemID) AS RecentArticleCount
@@ -49,24 +47,19 @@ export async function GET(request: NextRequest) {
       ),
 
       CategoryGrowth AS (
-        -- Calculate growth rate for each category
         SELECT
           c.CategoryID,
           c.Name AS CategoryName,
           c.Description,
           COALESCE(rca.RecentArticleCount, 0) AS RecentArticleCount,
           COALESCE(ch.PastArticleCount, 0) AS PastArticleCount,
-          -- Calculate base growth rate
           CASE
             WHEN COALESCE(ch.PastArticleCount, 0) = 0 THEN
-              -- If no past articles, use recent count as growth
               COALESCE(rca.RecentArticleCount, 0)
             ELSE
-              -- Otherwise calculate percentage growth
               (COALESCE(rca.RecentArticleCount, 0) - COALESCE(ch.PastArticleCount, 0)) /
               COALESCE(ch.PastArticleCount, 1) * 100
           END AS GrowthRate,
-          -- Check for subscriptions by our user
           EXISTS (
             SELECT 1
             FROM Subscriptions s
@@ -78,11 +71,9 @@ export async function GET(request: NextRequest) {
         LEFT JOIN RecentCategoryActivity rca ON c.CategoryID = rca.CategoryID
         LEFT JOIN CategoryHistory ch ON c.CategoryID = ch.CategoryID
         WHERE
-          -- Filter for categories that have some activity
           COALESCE(rca.RecentArticleCount, 0) > 0 OR COALESCE(ch.PastArticleCount, 0) > 0
       ),
 
-      -- Get user interactions with categories
       UserCategoryInteractions AS (
         SELECT
           fc.CategoryID,
@@ -95,7 +86,6 @@ export async function GET(request: NextRequest) {
         GROUP BY fc.CategoryID
       ),
 
-      -- Calculate final emerging score using multiple factors
       EmergingCategories AS (
         SELECT
           cg.CategoryID,
@@ -106,16 +96,12 @@ export async function GET(request: NextRequest) {
           cg.GrowthRate,
           cg.IsSubscribed,
           COALESCE(uci.InteractionCount, 0) AS UserInteractionCount,
-          -- Weighted emerging score formula combining multiple signals
           (
             CASE
-              -- Boost for categories the user has interacted with
               WHEN COALESCE(uci.InteractionCount, 0) > 0 THEN
                 (cg.GrowthRate * 1.2) + (COALESCE(uci.InteractionCount, 0) * 2)
-              -- Boost for completely new categories (high growth with no history)
               WHEN cg.PastArticleCount = 0 AND cg.RecentArticleCount > 3 THEN
                 cg.RecentArticleCount * 5
-              -- Normal calculation for other categories
               ELSE
                 cg.GrowthRate
             END
@@ -123,11 +109,9 @@ export async function GET(request: NextRequest) {
           COALESCE((cg.RecentArticleCount + cg.PastArticleCount), 0) AS TotalArticleCount
         FROM CategoryGrowth cg
         LEFT JOIN UserCategoryInteractions uci ON cg.CategoryID = uci.CategoryID
-        -- Don't show categories the user is already fully subscribed to
         WHERE cg.IsSubscribed = 0
       )
 
-      -- Get final list of emerging topics
       SELECT
         ec.CategoryID,
         ec.CategoryName,

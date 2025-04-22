@@ -709,9 +709,6 @@ export async function getUserFeedItems(userId: number, limit = 20, offset = 0) {
   }
 }
 
-/**
- * Get user's subscribed feeds
- */
 export async function getUserSubscriptions(userId: number) {
   try {
     const subscriptions = await executeQuery({

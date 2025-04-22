@@ -3,8 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
-import { NavActions } from "@/components/nav-actions";
-import { LogoutButton } from "@/components/logout-button";
 import { ArticleCard } from "@/components/article-card";
 import { TrendingUp, Sparkles, LineChart, PlusCircle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
@@ -27,6 +25,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import type { ArticleProps } from "@/components/article-card";
+
+// Interface for emerging topics in DiscoverPage
+interface EmergingTopic {
+  CategoryID: number;
+  CategoryName: string;
+  Description?: string;
+  ArticleCount: number;
+}
+
 export default function DiscoverPage() {
   const router = useRouter();
   const [user, setUser] = useState<{
@@ -38,9 +46,9 @@ export default function DiscoverPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // States for different discover content
-  const [trendingArticles, setTrendingArticles] = useState([]);
-  const [similarUserContent, setSimilarUserContent] = useState([]);
-  const [emergingTopics, setEmergingTopics] = useState([]);
+  const [trendingArticles, setTrendingArticles] = useState<ArticleProps['article'][]>([]);
+  const [similarUserContent, setSimilarUserContent] = useState<ArticleProps['article'][]>([]);
+  const [emergingTopics, setEmergingTopics] = useState<EmergingTopic[]>([]);
   const [contentLoading, setContentLoading] = useState({
     trending: true,
     similar: true,
@@ -219,8 +227,9 @@ export default function DiscoverPage() {
             <div className="text-sm text-muted-foreground">
               Welcome, {user.name}
             </div>
-            <LogoutButton />
-            <NavActions />
+            <Button variant="outline" size="sm" className="w-full">
+              Logout
+            </Button>
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-6 p-6">

@@ -40,11 +40,9 @@ export async function GET(request: NextRequest) {
       ),
 
       UserSimilarityScores AS (
-        -- Calculate similarity scores between users based on category interests
         SELECT
           ? AS TargetUserID, -- Our user
           uci_other.UserID AS OtherUserID,
-          -- Complex similarity calculation using category overlaps
           SUM(
             CASE
               WHEN uci_target.CategoryID IS NOT NULL AND uci_other.CategoryID IS NOT NULL THEN
@@ -63,7 +61,6 @@ export async function GET(request: NextRequest) {
       ),
 
       PopularArticlesAmongSimilarUsers AS (
-        -- Find popular articles among similar users
         SELECT
           i.ItemID,
           COUNT(DISTINCT i.UserID) AS UserCount,
@@ -76,7 +73,6 @@ export async function GET(request: NextRequest) {
             END
           ) AS WeightedInteractionScore,
           MAX(uss.SimilarityScore) AS MaxSimilarityScore,
-          -- Calculate final relevance score incorporating similarity
           (
             COUNT(DISTINCT i.UserID) *
             SUM(
@@ -97,7 +93,6 @@ export async function GET(request: NextRequest) {
         LIMIT 20
       ),
 
-      -- Check if the user already has read/interacted with these articles
       UserInteractions AS (
         SELECT DISTINCT ItemID
         FROM Interactions
@@ -108,7 +103,6 @@ export async function GET(request: NextRequest) {
         WHERE UserID = ? AND IsRead = 1
       )
 
-      -- Get final article details
       SELECT
         fi.ItemID,
         fi.Title,

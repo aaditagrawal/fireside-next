@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { NavActions } from "@/components/nav-actions";
 import { FeedItemList } from "@/components/feed-item-list";
@@ -33,15 +33,9 @@ interface FeedDetails {
   LastFetchedAt: string | null; // Allow null
 }
 
-export default function FeedPage({
-  params,
-}: {
-  params: { id: string } | Promise<{ id: string }>;
-}) {
-  // Properly unwrap params if it's a Promise
-  const unwrappedParams = React.use(params as Promise<{ id: string }>);
-  const feedIdString = unwrappedParams.id;
-
+export default function FeedPage() {
+  const params = useParams();
+  const feedIdString: string = Array.isArray(params.id) ? (params.id[0] ?? "") : (params.id ?? "");
   const router = useRouter();
   const [user, setUser] = useState<{
     id: number;

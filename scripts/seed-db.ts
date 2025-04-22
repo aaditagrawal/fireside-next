@@ -4,10 +4,10 @@
   Run with: npx ts-node scripts/seed-db.ts
 */
 import 'dotenv/config';
-import pool, { executeQuery } from '../src/lib/db.ts';
-import { registerUser } from '../src/lib/auth.ts';
-import { createSession } from '../src/lib/session.ts';
-import { processFeed } from '../src/lib/rss-parser.ts';
+import pool, { executeQuery } from '../src/lib/db';
+import { registerUser } from '../src/lib/auth';
+import { createSession } from '../src/lib/session';
+import { processFeed } from '../src/lib/rss-parser';
 
 // Sample RSS feed URLs
 const FEEDS = [
