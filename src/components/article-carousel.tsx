@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -53,6 +53,14 @@ export function ArticleCarousel({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+
+  // Check scroll buttons state on component mount and article changes
+  useEffect(() => {
+    handleScroll();
+    // Add a small delay to recheck after rendering is complete
+    const timer = setTimeout(handleScroll, 100);
+    return () => clearTimeout(timer);
+  }, [articles]);
 
   // Function to scroll carousel
   const scroll = (direction: "left" | "right") => {
@@ -223,12 +231,8 @@ export function ArticleCarousel({
                   <CardTitle className="text-base line-clamp-2 group-hover:text-primary transition-colors">
                     {article.Title || "Untitled Article"}
                   </CardTitle>
-                  <CardDescription className="flex items-center gap-1 mt-1">
-                    {article.CategoryName && (
-                      <span className="bg-muted text-xs px-2 py-0.5 rounded-full">
-                        {article.CategoryName}
-                      </span>
-                    )}
+                  <CardDescription className="flex items-center gap-1 mt-1 truncate">
+                    {/* Only show feed title, remove categories from carousel items */}
                     {article.FeedTitle && (
                       <span className="text-xs truncate">
                         {article.FeedTitle}
@@ -249,12 +253,7 @@ export function ArticleCarousel({
                   {article.IsSaved && (
                     <div className="flex items-center gap-1">
                       <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                      Saved
-                    </div>
-                  )}
-                  {article.Score !== undefined && (
-                    <div className="text-xs font-medium">
-                      Score: {article.Score.toFixed(1)}
+                      <span className="sr-only">Saved</span>
                     </div>
                   )}
                 </CardFooter>
